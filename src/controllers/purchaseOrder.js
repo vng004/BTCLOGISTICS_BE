@@ -1,6 +1,5 @@
 import PurchaseOrder from '../models/PurchaseOrder.js';
 import Customer from '../models/Customer.js';
-import Parcel from '../models/Parcel.js';
 
 // Lấy danh sách đơn hàng
 export const getPurchaseOrders = async (req, res, next) => {
@@ -18,6 +17,7 @@ export const getPurchaseOrders = async (req, res, next) => {
                 { orderCode: { $regex: keyword, $options: 'i' } },
                 { trackingCode: { $regex: keyword, $options: 'i' } },
                 { productName: { $regex: keyword, $options: 'i' } },
+                { purchaseCode: { $regex: keyword, $options: 'i' } },
             ];
         }
         if (status !== '' && status !== undefined) {
@@ -81,7 +81,7 @@ export const getPurchaseOrderById = async (req, res, next) => {
 export const getPurchaseOrderByOrderCode = async (req, res, next) => {
     try {
         const { orderCode } = req.body;
-        const data = await PurchaseOrder.findOne({ orderCode }); // Tìm theo orderCode
+        const data = await PurchaseOrder.findOne({ orderCode });
         if (!data) {
             return res.status(404).json({
                 success: false,
@@ -113,7 +113,7 @@ export const addPurchaseOrder = async (req, res, next) => {
         if (!customer) {
             return res.status(400).json({
                 success: false,
-                message: 'Mã khách hàng không tồn tại',
+                message: "Mã khách hàng không tồn tại",
             });
         }
 
@@ -121,24 +121,22 @@ export const addPurchaseOrder = async (req, res, next) => {
         const randomSixDigits = Math.floor(100000 + Math.random() * 900000);
         const orderCode = `BT.${customerCode}-${randomSixDigits}`;
 
-        // Kiểm tra orderCode đã tồn tại
-        const existingOrder = await PurchaseOrder.findOne({ orderCode });
-        if (existingOrder) {
-            return res.status(400).json({
-                success: false,
-                message: 'Mã đơn hàng đã tồn tại, vui lòng thử lại',
-            });
-        }
-
         // Tạo đơn hàng với orderCode và các trường khác từ req.body
         const data = await PurchaseOrder.create({
             ...req.body,
             orderCode,
+            status: 0, // Mặc định trạng thái ban đầu là 0
+            statusHistory: [
+                {
+                    status: 0,
+                    timestamp: new Date(),
+                },
+            ],
         });
 
         res.status(201).json({
             success: true,
-            message: 'Thêm đơn hàng thành công',
+            message: "Thêm đơn hàng thành công",
             data,
         });
     } catch (error) {
@@ -146,7 +144,7 @@ export const addPurchaseOrder = async (req, res, next) => {
         next({
             status: 500,
             success: false,
-            message: 'Thêm đơn hàng thất bại',
+            message: "Thêm đơn hàng thất bại",
             error: error.message,
         });
     }
@@ -156,44 +154,70 @@ export const addPurchaseOrder = async (req, res, next) => {
 export const updatePurchaseOrder = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const {
-            customerCode,
-            trackingCode,
-        } = req.body;
+        const { customerCode, purchaseCode, status } = req.body;
 
+        // Lấy thông tin đơn hàng hiện tại
+        const existingOrder = await PurchaseOrder.findById(id);
+        if (!existingOrder) {
+            return res.status(404).json({
+                success: false,
+                message: "Đơn hàng không tồn tại",
+            });
+        }
 
-        // Kiểm tra customerCode tồn tại
-        if (customerCode) {
-            const customer = await Customer.findOne({ customerCode });
+        // Kiểm tra mã khách hàng nếu có thay đổi
+        if (customerCode && customerCode !== existingOrder.customerCode) {
+            const customer = await Customer.findOne({ customerCode, _id: { $ne: id } });
             if (!customer) {
                 return res.status(400).json({
                     success: false,
-                    message: 'Mã khách hàng không tồn tại',
+                    message: "Mã khách hàng không tồn tại",
                 });
             }
         }
 
-        // Kiểm tra trackingCode tồn tại
-        if (trackingCode) {
-            const parcel = await Parcel.findOne({ trackingCode });
-            if (!parcel) {
+        // Kiểm tra mã mua hàng nếu có thay đổi
+        if (purchaseCode && purchaseCode !== existingOrder.purchaseCode) {
+            const parcel = await PurchaseOrder.findOne({
+                purchaseCode,
+                _id: { $ne: id }, // Loại trừ chính đơn hàng đang cập nhật
+            });
+            if (parcel) {
                 return res.status(400).json({
                     success: false,
-                    message: 'Mã vận đơn không tồn tại',
+                    message: "Mã mua hàng đã tồn tại",
                 });
             }
+        }
+
+        if (existingOrder.status === 3 || existingOrder.status === 4) {
+            return res.status(400).json({
+                success: false,
+                message: "Đơn hàng đã tất toán hoặc đã bị hủy, không thể thay đổi trạng thái",
+            });
+        }
+
+        // Chuẩn bị dữ liệu cập nhật
+        const updateData = { ...req.body };
+
+        // Nếu có thay đổi status, thêm vào statusHistory
+        if (status !== undefined && status !== existingOrder.status) {
+            updateData.statusHistory = [
+                ...existingOrder.statusHistory,
+                {
+                    status,
+                    timestamp: new Date(),
+                },
+            ];
+            updateData.status = status; // Cập nhật trạng thái mới
         }
 
         // Cập nhật đơn hàng
-        const data = await PurchaseOrder.findByIdAndUpdate(
-            id,
-            req.body,
-            { new: true }
-        );
+        const data = await PurchaseOrder.findByIdAndUpdate(id, updateData, { new: true });
 
         res.status(200).json({
             success: true,
-            message: 'Cập nhật đơn hàng thành công',
+            message: "Cập nhật đơn hàng thành công",
             data,
         });
     } catch (error) {
@@ -201,7 +225,7 @@ export const updatePurchaseOrder = async (req, res, next) => {
         next({
             status: 500,
             success: false,
-            message: 'Cập nhật đơn hàng thất bại',
+            message: "Cập nhật đơn hàng thất bại",
             error: error.message,
         });
     }
@@ -211,6 +235,20 @@ export const updatePurchaseOrder = async (req, res, next) => {
 export const removePurchaseOrder = async (req, res, next) => {
     try {
         const { id } = req.params;
+        const existingOrder = await PurchaseOrder.findById(id);
+        if (!existingOrder) {
+            return res.status(404).json({
+                success: false,
+                message: "Không tìm thấy đơn hàng với ID này",
+            });
+        }
+
+        if (existingOrder.status !== 0 && existingOrder.status !== 4) {
+            return res.status(400).json({
+                success: false,
+                message: "Chỉ có thể xóa đơn hàng khi trạng thái là 'Chưa xác nhận' hoặc 'Đơn đã bị hủy'",
+            });
+        }
         const data = await PurchaseOrder.findByIdAndDelete(id);
 
         if (!data) {

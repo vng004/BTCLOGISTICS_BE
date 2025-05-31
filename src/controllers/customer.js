@@ -42,7 +42,7 @@ export const getCustomerById = async (req, res, next) => {
     try {
         const { id } = req.params
         
-        const data = await Customer.findById(id).populate("parcels")
+        const data = await Customer.findById(id).populate("parcels").populate("")
         if (!data) {
             return res.status(404).json({
                 success: false,
@@ -119,7 +119,7 @@ export const updateCustomer = async (req, res, next) => {
 
 
         if (customerCode) {
-            const existingCode = await Customer.findOne({ customerCode, _id: { $ne: id } });
+            const existingCode = await Customer.findOne({ customerCode });
             if (existingCode) {
                 return res.status(400).json({
                     success: false,
@@ -128,7 +128,7 @@ export const updateCustomer = async (req, res, next) => {
             }
         }
         if (email) {
-            const existingEmail = await Customer.findOne({ email, _id: { $ne: id } });
+            const existingEmail = await Customer.findOne({ email });
             if (existingEmail) {
                 return res.status(400).json({
                     success: false,

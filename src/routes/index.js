@@ -2,6 +2,7 @@ import routeAuth from "./auth.js";
 import routeBanner from "./banner.js";
 import routeCustomer from "./customer.js";
 import routeExchangeRate from "./exchangeRate.js";
+import routeOfficialGood from "./officialGood.js";
 import routeOrderSucces from "./orderSucces.js";
 import routeParcel from "./parcel.js";
 import routePurchaseOrder from "./purchaseOrder.js";
@@ -14,4 +15,5 @@ export function router(app) {
     app.use("/api/banner", routeBanner)
     app.use("/api/order-succes", routeOrderSucces)
     app.use("/api/purchase-order", routePurchaseOrder)
+    app.use("/api/official-good", routeOfficialGood)
 } 

@@ -6,6 +6,9 @@ const purchaseOrderSchema = new mongoose.Schema(
             type: String,
             required: true,
         },
+        purchaseCode: {
+            type: String,
+        },
         fullName: {
             type: String,
             required: true,
@@ -35,7 +38,6 @@ const purchaseOrderSchema = new mongoose.Schema(
         actualValue: {
             type: String,
             required: true,
-
         },
         domesticFee: {
             type: String,
@@ -60,6 +62,20 @@ const purchaseOrderSchema = new mongoose.Schema(
             required: true,
             default: 0
         },
+        
+    statusHistory: [
+        {
+            status: {
+                type: Number,
+                enum: [0, 1, 2, 3,4],
+                required: true,
+            },
+            timestamp: {
+                type: Date,
+                default: Date.now,
+            },
+        },
+    ]
     },
     {
         timestamps: true,
