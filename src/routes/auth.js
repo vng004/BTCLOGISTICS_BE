@@ -8,6 +8,9 @@ const routeAuth = Router()
 
 routeAuth.post('/login', Login)
 
+routeAuth.use(validateRequest(authSchema))
+routeAuth.post('/create-admin', createAdmin)
+
 routeAuth.use(checkAuth)
 routeAuth.use(checksuperAdmin)
 
@@ -15,7 +18,5 @@ routeAuth.get("/", getAuth);
 routeAuth.get("/:id", getAuthById);
 routeAuth.patch("/:id", updateAuth);
 
-routeAuth.use(validateRequest(authSchema))
-routeAuth.post('/create-admin', createAdmin)
 routeAuth.delete("/:id", deleteUser);
 export default routeAuth

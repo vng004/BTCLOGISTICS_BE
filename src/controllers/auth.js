@@ -34,7 +34,6 @@ export const Login = async (req, res, next) => {
             process.env.JWT_SECRET,
             { expiresIn: "7d" }
         );
-        // const refreshToken = jwt.sign({ id: user._id }, process.env.JWT_REFRESH_SECRET, { expiresIn: "7d" });
         res.status(200).json({
             success: true,
             message: "Đăng nhập tài khoản thành công!",
