@@ -365,8 +365,14 @@ export const getOrderSucces = async (req, res, next) => {
     if (start_date || end_date) {
       query.exportDate = {};
       if (start_date) query.exportDate.$gte = new Date(start_date);
-      if (end_date) query.exportDate.$lte = new Date(end_date);
+
+      if (end_date) {
+        const endDate = new Date(end_date);
+        endDate.setHours(23, 59, 59, 999); // Đặt giờ là 23:59:59.999
+        query.exportDate.$lte = endDate;
+      }
     }
+
 
     const total = await OrderSucces.countDocuments(query);
 
