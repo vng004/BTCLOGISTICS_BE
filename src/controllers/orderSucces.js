@@ -237,85 +237,67 @@ export const updateOrderSuccesById = async (req, res, next) => {
 
       return {
         ...p,
-        quantity: quantity,
-        actualCubicMeter: actualCubicMeter.toString().replace('.', ','), // Giữ định dạng dấu phẩy
-        actualWeight: actualWeight.toString(), // Lưu dưới dạng chuỗi
+        quantity,
+        actualCubicMeter, // Giữ số thô
+        actualWeight, // Giữ số thô
       };
     });
 
     // Tính totalActualWeight1: Tổng actualCubicMeter của các parcel
     const totalActualWeight1Raw = updatedParcels.reduce((sum, p) => {
-      const cubicMeter = parseFloat(p.actualCubicMeter.replace(',', '.')) || 0;
-      return sum + cubicMeter;
+      return sum + (parseFloat(p.actualCubicMeter) || 0);
     }, 0);
     // Làm tròn lên totalActualWeight1 đến 3 chữ số thập phân
     const totalActualWeight1 = Math.ceil(totalActualWeight1Raw * 1000) / 1000;
 
     // Tính totalActualWeight2: Tổng actualWeight của các parcel
     const totalActualWeight2Raw = updatedParcels.reduce((sum, p) => {
-      const weight = parseFloat(p.actualWeight) || 0;
-      return sum + weight;
+      return sum + (parseFloat(p.actualWeight) || 0);
     }, 0);
     // Làm tròn lên totalActualWeight2 đến 2 chữ số thập phân
     const totalActualWeight2 = Math.ceil(totalActualWeight2Raw * 100) / 100;
 
     // Cập nhật totalActualWeight
     const totalActualWeight = {
-      totalActualWeight1: totalActualWeight1.toString(),
-      totalActualWeight2: totalActualWeight2.toString(),
+      totalActualWeight1,
+      totalActualWeight2,
     };
 
     // Lấy các giá trị từ req.body, nếu không có thì dùng giá trị hiện tại
     const transportFeeRate =
-      req.body.transportFeeRate || existingOrder.transportFeeRate || { transportFeeRate1: '0', transportFeeRate2: '0' };
+      req.body.transportFeeRate || existingOrder.transportFeeRate || { transportFeeRate1: 0, transportFeeRate2: 0 };
     const transportFeeNoteRaw =
-      req.body.transportFeeNote !== undefined ? req.body.transportFeeNote : existingOrder.transportFeeNote || '0';
+      req.body.transportFeeNote !== undefined ? req.body.transportFeeNote : existingOrder.transportFeeNote || 0;
     const importEntrustmentFeeRaw =
-      req.body.importEntrustmentFee !== undefined ? req.body.importEntrustmentFee : existingOrder.importEntrustmentFee || '0';
+      req.body.importEntrustmentFee !== undefined ? req.body.importEntrustmentFee : existingOrder.importEntrustmentFee || 0;
     const shipFeeNoteRaw =
-      req.body.shipFeeNote !== undefined ? req.body.shipFeeNote : existingOrder.shipFeeNote || '0';
+      req.body.shipFeeNote !== undefined ? req.body.shipFeeNote : existingOrder.shipFeeNote || 0;
     const customServicesRaw =
       req.body.customServices !== undefined ? req.body.customServices : existingOrder.customServices || [];
-
-    // Hàm định dạng tiền tệ chuẩn Việt Nam (20.000)
-    const formatCurrency = (value) => {
-      const num = parseFloat(value.toString().replace('.', '')) || 0; // Xử lý cả 20.000 và 20000
-      return num.toLocaleString('vi-VN', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-    };
-
-    // Định dạng các giá trị phí
-    const transportFeeNote = formatCurrency(transportFeeNoteRaw);
-    const importEntrustmentFee = formatCurrency(importEntrustmentFeeRaw);
-    const shipFeeNote = formatCurrency(shipFeeNoteRaw);
-    const transportFeeRate1 = formatCurrency(transportFeeRate.transportFeeRate1);
-    const transportFeeRate2 = formatCurrency(transportFeeRate.transportFeeRate2);
 
     // Định dạng customServices
     const customServices = customServicesRaw.map((service) => ({
       name: service.name?.toString() || '',
-      value: formatCurrency(service.value || '0'),
+      value: parseFloat(service.value.toString().replace(',', '.')) || 0, // Chuyển thành số thô
     }));
 
     // Tính tổng value của customServices
-    const totalCustomServicesRaw = customServicesRaw.reduce((sum, service) => {
-      const value = parseFloat(service.value.toString().replace('.', '')) || 0;
-      return sum + value;
+    const totalCustomServicesRaw = customServices.reduce((sum, service) => {
+      return sum + (service.value || 0);
     }, 0);
     // Làm tròn lên totalCustomServices đến 0 chữ số thập phân (số nguyên)
     const totalCustomServices = Math.ceil(totalCustomServicesRaw);
 
     // Tính totalAmount
     const totalAmountRaw =
-      (parseFloat(totalActualWeight1) || 0) * (parseFloat(transportFeeRate.transportFeeRate1.toString().replace('.', '')) || 0) +
-      (parseFloat(totalActualWeight2) || 0) * (parseFloat(transportFeeRate.transportFeeRate2.toString().replace('.', '')) || 0) +
-      (parseFloat(transportFeeNoteRaw.toString().replace('.', '')) || 0) +
-      (parseFloat(importEntrustmentFeeRaw.toString().replace('.', '')) || 0) +
-      (parseFloat(shipFeeNoteRaw.toString().replace('.', '')) || 0) +
+      (totalActualWeight1 || 0) * (parseFloat(transportFeeRate.transportFeeRate1.toString().replace(',', '.')) || 0) +
+      (totalActualWeight2 || 0) * (parseFloat(transportFeeRate.transportFeeRate2.toString().replace(',', '.')) || 0) +
+      (parseFloat(transportFeeNoteRaw.toString().replace(',', '.')) || 0) +
+      (parseFloat(importEntrustmentFeeRaw.toString().replace(',', '.')) || 0) +
+      (parseFloat(shipFeeNoteRaw.toString().replace(',', '.')) || 0) +
       totalCustomServices;
     // Làm tròn lên totalAmount đến 0 chữ số thập phân (số nguyên)
-    const totalAmountNum = Math.ceil(totalAmountRaw);
-    // Định dạng totalAmount
-    const totalAmount = formatCurrency(totalAmountNum);
+    const totalAmount = Math.ceil(totalAmountRaw);
 
     // Cập nhật dữ liệu với các giá trị đã tính toán
     const updatedData = {
@@ -323,12 +305,12 @@ export const updateOrderSuccesById = async (req, res, next) => {
       parcels: updatedParcels,
       totalActualWeight,
       transportFeeRate: {
-        transportFeeRate1: transportFeeRate1,
-        transportFeeRate2: transportFeeRate2,
+        transportFeeRate1: parseFloat(transportFeeRate.transportFeeRate1.toString().replace(',', '.')) || 0,
+        transportFeeRate2: parseFloat(transportFeeRate.transportFeeRate2.toString().replace(',', '.')) || 0,
       },
-      transportFeeNote,
-      importEntrustmentFee,
-      shipFeeNote,
+      transportFeeNote: parseFloat(transportFeeNoteRaw.toString().replace(',', '.')) || 0,
+      importEntrustmentFee: parseFloat(importEntrustmentFeeRaw.toString().replace(',', '.')) || 0,
+      shipFeeNote: parseFloat(shipFeeNoteRaw.toString().replace(',', '.')) || 0,
       customServices,
       totalAmount,
     };
@@ -353,7 +335,7 @@ export const updateOrderSuccesById = async (req, res, next) => {
 
 export const getOrderSucces = async (req, res, next) => {
   try {
-    const { keyword = "", page = 1, per_page = 10, exportCode, start_date, end_date } = req.query;
+    const { keyword = "", page = 1, per_page = 10, exportCode, start_date, end_date, customerCode } = req.query;
 
     const pageNum = parseInt(page, 10);
     const perPageNum = parseInt(per_page, 10);
@@ -366,14 +348,18 @@ export const getOrderSucces = async (req, res, next) => {
     }
 
     let query = {};
-    if (keyword) {
+    if (customerCode) {
+      const customers = await Customer.find({ customerCode: { $regex: customerCode, $options: 'i' } });
+      const customerIds = customers.map(customer => customer._id);
+      query.customer = { $in: customerIds };
+    } else if (keyword) {
       const customers = await Customer.find({ customerCode: { $regex: keyword, $options: 'i' } });
       const customerIds = customers.map(customer => customer._id);
-      query = { customer: { $in: customerIds } };
+      query.customer = { $in: customerIds };
     }
 
     if (exportCode) {
-      query.exportCode = { $regex: exportCode, $options: 'i' }
+      query.exportCode = { $regex: exportCode, $options: 'i' };
     }
 
     if (start_date || end_date) {
@@ -389,16 +375,28 @@ export const getOrderSucces = async (req, res, next) => {
       .sort({ exportDate: -1 })
       .skip(skip)
       .limit(perPageNum)
-      .populate("customer", "customerCode fullName")
-    const totalAmount = await OrderSucces.aggregate([
+      .populate("customer", "customerCode fullName");
+
+    // Tính tổng totalAmount, giữ giá trị thô
+    const totalAmountResult = await OrderSucces.aggregate([
       { $match: query },
       {
         $group: {
           _id: null,
-          totalAmount: { $sum: { $toDouble: "$totalAmount" } },
+          totalAmount: {
+            $sum: {
+              $convert: {
+                input: { $replaceAll: { input: "$totalAmount", find: ".", replacement: "" } },
+                to: "double",
+                onError: 0,
+                onNull: 0,
+              },
+            },
+          },
         },
       },
-    ]).then((result) => result[0]?.totalAmount || 0);
+    ]);
+    const totalAmount = totalAmountResult[0]?.totalAmount || 0; // Giữ giá trị thô
 
     const totalPages = Math.ceil(total / perPageNum);
 
@@ -423,6 +421,7 @@ export const getOrderSucces = async (req, res, next) => {
     });
   }
 };
+
 
 export const getOrderSuccesById = async (req, res, next) => {
   try {
@@ -464,3 +463,4 @@ export const removeOrderSuccesById = async (req, res, next) => {
     });
   }
 }
+

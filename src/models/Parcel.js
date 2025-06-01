@@ -5,11 +5,18 @@ const parcelsSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    packageCode: {
+        type: String,
+        // required: true
+    },
     customer: {
         type: mongoose.Schema.ObjectId,
         ref: "Customer",
         default: null,
     },
+    ordersucces: [
+        { type: mongoose.Schema.Types.ObjectId, ref: "OrderSucces" }
+    ],
     weight: {
         type: String,
         default: 0,

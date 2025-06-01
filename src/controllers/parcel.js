@@ -4,11 +4,14 @@ import Parcel from "../models/Parcel.js";
 
 export const getParcel = async (req, res, next) => {
     try {
-        const { keyword = "", page = 1, per_page = 6, startDate, endDate, shipmentStatus, customerCode = "" } = req.query;
+        const { keyword = "", page = 1, per_page = 6, startDate, endDate, shipmentStatus, customerCode, } = req.query;
         const query = {};
 
         if (keyword) {
-            query.trackingCode = { $regex: keyword, $options: 'i' };
+            query.$or = [
+                { trackingCode: { $regex: keyword, $options: "i" } },
+                { packageCode: { $regex: keyword, $options: "i" } },
+            ];
         }
 
         if (startDate || endDate) {
@@ -269,7 +272,7 @@ export const updateParcel = async (req, res, next) => {
 
 export const updateParcelStatus = async (req, res, next) => {
     try {
-        const { shipmentStatus } = req.body;
+        const { shipmentStatus, packageCode } = req.body;
 
         // Kiểm tra shipmentStatus có được cung cấp
         if (shipmentStatus === undefined || shipmentStatus === null) {
@@ -292,6 +295,12 @@ export const updateParcelStatus = async (req, res, next) => {
             return res.status(400).json({
                 success: false,
                 message: "Vui lòng cung cấp file Excel để cập nhật",
+            });
+        }
+        if (!packageCode || packageCode.trim() === "") {
+            return res.status(400).json({
+                success: false,
+                message: "Vui lòng cung cấp mã bao hợp lệ",
             });
         }
 
@@ -363,7 +372,7 @@ export const updateParcelStatus = async (req, res, next) => {
                 updateOne: {
                     filter: { trackingCode: parcel.trackingCode },
                     update: {
-                        $set: { shipmentStatus: status },
+                        $set: { shipmentStatus: status, packageCode },
                         $push: {
                             statusHistory: {
                                 status,
