@@ -14,7 +14,7 @@ export const getCustomer = async (req, res, next) => {
 
         const total = await Customer.countDocuments(query)
 
-        const data = await Customer.find(query).skip(skip).limit(perPage).populate("parcels.parcel").populate("ordersuccess").sort({ createdAt: -1 });
+        const data = await Customer.find(query).skip(skip).limit(perPage).populate("parcels.parcel").sort({ createdAt: -1 });
 
 
         res.status(201).json({

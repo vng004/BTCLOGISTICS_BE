@@ -131,30 +131,29 @@ export const getParcelById = async (req, res, next) => {
 
 export const addParcel = async (req, res, next) => {
     try {
-        const { trackingCode, weight } = req.body; // Không lấy description từ req.body
+        const { trackingCode, weight } = req.body;
         let parcelsData = [];
-        let existingCode = [];
 
+        // Xử lý file Excel nếu có
         if (req.file) {
             const wk = xlsx.read(req.file.buffer, { type: "buffer" });
             const sheetName = wk.SheetNames[0];
             const sheet = wk.Sheets[sheetName];
-
             const data = xlsx.utils.sheet_to_json(sheet, { header: 1 });
+
             const fileParcels = await Promise.all(
                 data.slice(1).map(async (row) => {
-                    const trackingCode = row[0];
+                    const trackingCode = row[0]?.toString().trim();
                     const weight = row[1];
 
-                    if (!trackingCode || trackingCode.toString().trim() === "") {
+                    if (!trackingCode || trackingCode === "") {
                         console.log(`Bỏ qua kiện hàng với Mã tracking rỗng: ${JSON.stringify(row)}`);
                         return null;
                     }
 
                     return {
                         trackingCode,
-                        weight,
-
+                        weight: parseFloat(weight) || 0,
                         shipmentStatus: 0,
                         statusHistory: [
                             {
@@ -165,14 +164,14 @@ export const addParcel = async (req, res, next) => {
                     };
                 })
             );
-            parcelsData = parcelsData.concat(fileParcels.filter((item) => item !== null));
+            parcelsData = fileParcels.filter((item) => item !== null);
         }
 
+        // Thêm kiện hàng thủ công nếu có
         if (trackingCode && weight !== undefined) {
             parcelsData.push({
-                trackingCode,
+                trackingCode: trackingCode.trim(),
                 weight: parseFloat(weight) || 0,
-
                 shipmentStatus: 0,
                 statusHistory: [
                     {
@@ -190,21 +189,33 @@ export const addParcel = async (req, res, next) => {
             });
         }
 
-        const trackingCodes = parcelsData.map((item) => item.trackingCode);
+        // Loại bỏ các mã tracking trùng lặp
+        const uniqueParcelsData = [];
+        const seenTrackingCodes = new Set();
+        for (const parcel of parcelsData) {
+            if (!seenTrackingCodes.has(parcel.trackingCode)) {
+                seenTrackingCodes.add(parcel.trackingCode);
+                uniqueParcelsData.push(parcel);
+            }
+        }
 
+        // Kiểm tra mã tracking đã tồn tại trong cơ sở dữ liệu
+        const trackingCodes = uniqueParcelsData.map((item) => item.trackingCode);
         const existingParcels = await Parcel.find({ trackingCode: { $in: trackingCodes } });
-        existingCode = existingParcels.map((parcel) => parcel.trackingCode);
+        const existingCodes = existingParcels.map((parcel) => parcel.trackingCode);
 
-        if (existingCode.length > 0) {
+        if (existingCodes.length > 0) {
             return res.status(400).json({
                 success: false,
-                message: `Đã có kiện hàng với mã tracking ${existingCode.join(", ")}, không thể thêm`,
-                duplicateTrackingCodes: existingCode,
+                message: `Đã có kiện hàng với mã tracking ${existingCodes.join(", ")}, không thể thêm`,
+                duplicateTrackingCodes: existingCodes,
             });
         }
 
-        const createdParcels = await Parcel.create(parcelsData);
+        // Tạo các kiện hàng mới
+        const createdParcels = await Parcel.create(uniqueParcelsData);
 
+        // Cập nhật timestamp cho statusHistory
         const updatedParcels = await Promise.all(
             createdParcels.map(async (parcel) => {
                 parcel.statusHistory[0].timestamp = parcel.createdAt;
@@ -222,6 +233,7 @@ export const addParcel = async (req, res, next) => {
         next({
             status: 500,
             success: false,
+            message: "Thêm kiện hàng thất bại",
             error: error.message,
         });
     }
@@ -315,7 +327,12 @@ export const updateParcelStatus = async (req, res, next) => {
             .map((row) => row[0]?.toString().trim())
             .filter((code) => code && code !== "");
 
-        if (updateData.length === 0) {
+        // Loại bỏ các mã trùng lặp
+        const uniqueTrackingCodes = [...new Set(updateData)];
+
+        console.log(uniqueTrackingCodes)
+
+        if (uniqueTrackingCodes.length === 0) {
             return res.status(400).json({
                 success: false,
                 message: "Vui lòng cung cấp ít nhất một mã tracking trong file Excel",
@@ -325,31 +342,11 @@ export const updateParcelStatus = async (req, res, next) => {
         const allParcels = await Parcel.find({}, { trackingCode: 1 });
         const allowedTrackingCodes = allParcels.map((parcel) => parcel.trackingCode);
 
-        const invalidTrackingCodes = updateData.filter(
+        const invalidTrackingCodes = uniqueTrackingCodes.filter(
             (code) => !allowedTrackingCodes.includes(code)
         );
 
-        if (invalidTrackingCodes.length > 0) {
-            return res.status(400).json({
-                success: false,
-                message: `Kiện hàng ${invalidTrackingCodes.join(", ")} không tồn tại trong kho hàng`,
-                invalidTrackingCodes,
-            });
-        }
-
-        const existingParcels = await Parcel.find({ trackingCode: { $in: updateData } });
-
-        if (existingParcels.length !== updateData.length) {
-            const foundTrackingCodes = existingParcels.map((parcel) => parcel.trackingCode);
-            const notFoundTrackingCodes = updateData.filter(
-                (code) => !foundTrackingCodes.includes(code)
-            );
-            return res.status(400).json({
-                success: false,
-                message: `Kiện hàng ${notFoundTrackingCodes.join(", ")} không tồn tại trong kho hàng`,
-                notFoundTrackingCodes,
-            });
-        }
+        const existingParcels = await Parcel.find({ trackingCode: { $in: uniqueTrackingCodes } });
 
         const operations = [];
         for (const parcel of existingParcels) {
@@ -394,6 +391,13 @@ export const updateParcelStatus = async (req, res, next) => {
 
         const result = await Parcel.bulkWrite(operations);
 
+        if (invalidTrackingCodes.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: `Kiện hàng ${invalidTrackingCodes.join(", ")} không tồn tại trong kho hàng`,
+                invalidTrackingCodes,
+            });
+        }
         res.status(200).json({
             success: false,
             message: "Cập nhật trạng thái kiện hàng thành công!",
@@ -433,7 +437,10 @@ export const toggleParcelInspection = async (req, res, next) => {
             .map((row) => row[0]?.toString().trim())
             .filter((code) => code && code !== "");
 
-        if (updateData.length === 0) {
+        const uniqueTrackingCodes = [...new Set(updateData)];
+
+
+        if (uniqueTrackingCodes.length === 0) {
             return res.status(400).json({
                 success: false,
                 message: "Vui lòng cung cấp ít nhất một mã tracking trong file Excel",
@@ -444,32 +451,14 @@ export const toggleParcelInspection = async (req, res, next) => {
         const allParcels = await Parcel.find({}, { trackingCode: 1 });
         const allowedTrackingCodes = allParcels.map((parcel) => parcel.trackingCode);
 
-        const invalidTrackingCodes = updateData.filter(
+        const invalidTrackingCodes = uniqueTrackingCodes.filter(
             (code) => !allowedTrackingCodes.includes(code)
         );
 
-        if (invalidTrackingCodes.length > 0) {
-            return res.status(400).json({
-                success: false,
-                message: `Kiện hàng ${invalidTrackingCodes.join(", ")} không tồn tại trong kho hàng`,
-                invalidTrackingCodes,
-            });
-        }
+
 
         // Lấy các kiện hàng cần cập nhật
-        const existingParcels = await Parcel.find({ trackingCode: { $in: updateData } });
-
-        if (existingParcels.length !== updateData.length) {
-            const foundTrackingCodes = existingParcels.map((parcel) => parcel.trackingCode);
-            const notFoundTrackingCodes = updateData.filter(
-                (code) => !foundTrackingCodes.includes(code)
-            );
-            return res.status(400).json({
-                success: false,
-                message: `Kiện hàng ${notFoundTrackingCodes.join(", ")} không tồn tại trong kho hàng`,
-                notFoundTrackingCodes,
-            });
-        }
+        const existingParcels = await Parcel.find({ trackingCode: { $in: uniqueTrackingCodes } });
 
         // Tạo danh sách operations để cập nhật inspection
         const operations = existingParcels.map((parcel) => ({
@@ -491,7 +480,14 @@ export const toggleParcelInspection = async (req, res, next) => {
 
         // Thực hiện bulk update
         const result = await Parcel.bulkWrite(operations);
-
+        
+        if (invalidTrackingCodes.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: `Kiện hàng ${invalidTrackingCodes.join(", ")} không tồn tại trong kho hàng`,
+                invalidTrackingCodes,
+            });
+        }
         res.status(200).json({
             success: true,
             message: "Cập nhật trạng thái kiểm tra kiện hàng thành công!",

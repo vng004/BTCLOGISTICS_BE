@@ -25,12 +25,7 @@ const customerSchema = new mongoose.Schema({
     },
     parcels: [
         { type: mongoose.Schema.Types.ObjectId, ref: "Parcel" }
-    ],
-    ordersucces: [
-        { type: mongoose.Schema.Types.ObjectId, ref: "OrderSucces" }
-
     ]
-
 }, {
     timestamps: true
 });
