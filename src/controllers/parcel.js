@@ -142,7 +142,7 @@ export const addParcel = async (req, res, next) => {
             const data = xlsx.utils.sheet_to_json(sheet, { header: 1 });
 
             const fileParcels = await Promise.all(
-                data.slice(1).map(async (row) => {
+                data.map(async (row) => {
                     const trackingCode = row[0]?.toString().trim();
                     const weight = row[1];
 
@@ -242,7 +242,7 @@ export const addParcel = async (req, res, next) => {
 export const updateParcel = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { trackingCode } = req.body;
+        const { trackingCode, shipmentStatus } = req.body;
 
         if (!id) {
             return res.status(400).json({
@@ -264,11 +264,20 @@ export const updateParcel = async (req, res, next) => {
             }
         }
 
-        const data = await Parcel.findByIdAndUpdate(id, req.body, { new: true });
+        const data = await Parcel.findByIdAndUpdate(id, {
+            $set: { ...req.body },
+            $push: {
+                statusHistory: {
+                    status: shipmentStatus,
+                    timestamp: new Date(),
+                },
+            },
+        }, { new: true });
         if (data) {
             return res.status(201).json({
                 success: true,
                 message: `Cập nhật kiện hàng thành công! ${trackingCode}`,
+                data
             });
         }
     } catch (error) {
@@ -323,7 +332,6 @@ export const updateParcelStatus = async (req, res, next) => {
         const data = xlsx.utils.sheet_to_json(sheet, { header: 1 });
 
         const updateData = data
-            .slice(1)
             .map((row) => row[0]?.toString().trim())
             .filter((code) => code && code !== "");
 
@@ -354,7 +362,6 @@ export const updateParcelStatus = async (req, res, next) => {
             if (parcel.shipmentStatus === 3) {
                 continue;
             }
-
 
             // Kiểm tra shipmentStatus lớn hơn currentStatus đúng 1 đơn vị
             const expectedStatus = parcel.shipmentStatus + 1;
@@ -433,7 +440,7 @@ export const toggleParcelInspection = async (req, res, next) => {
 
         // Lấy danh sách trackingCode từ file Excel
         const updateData = data
-            .slice(1)
+
             .map((row) => row[0]?.toString().trim())
             .filter((code) => code && code !== "");
 
@@ -480,7 +487,7 @@ export const toggleParcelInspection = async (req, res, next) => {
 
         // Thực hiện bulk update
         const result = await Parcel.bulkWrite(operations);
-        
+
         if (invalidTrackingCodes.length > 0) {
             return res.status(400).json({
                 success: false,
@@ -527,6 +534,7 @@ export const removeParcel = async (req, res, next) => {
         });
     }
 }
+
 export const assignToParcel = async (req, res, next) => {
     try {
         const { trackingCode, customerCode } = req.body;

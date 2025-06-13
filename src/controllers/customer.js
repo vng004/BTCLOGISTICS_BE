@@ -9,7 +9,10 @@ export const getCustomer = async (req, res, next) => {
         const skip = (Page - 1) * perPage;
 
         if (keyword) {
-            query.cutomerCode = { $regex: keyword, $options: 'i' }
+            query.$or = [
+                { customerCode: { $regex: keyword, $options: "i" } },
+                { fullName: { $regex: keyword, $options: "i" } }
+            ]
         }
 
         const total = await Customer.countDocuments(query)
@@ -41,7 +44,7 @@ export const getCustomer = async (req, res, next) => {
 export const getCustomerById = async (req, res, next) => {
     try {
         const { id } = req.params
-        
+
         const data = await Customer.findById(id).populate("parcels").populate("")
         if (!data) {
             return res.status(404).json({
